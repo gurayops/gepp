@@ -1,0 +1,31 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ appName }}-deployment
+  labels:
+    app: {{ appName }}
+spec:
+  selector:
+    matchLabels:
+      app: {{ appName }}
+  template:
+    metadata:
+      labels:
+        app: {{ appName }}
+    spec:
+      containers:
+      - name: {{ appName }}
+        image: {{ imageName }}
+        ports:
+        {% for portDef in ports -%}
+        - containerPort: {{ portDef.port }}
+          name: {{ portDef.name }}{% if portDef.protocol %}
+          protocol: {{ portDef.protocol }}{% endif %}
+        {% endfor -%}
+        resources:
+          requests:
+            memory: "64Mi"
+            cpu: "50m"
+          limits:
+            memory: "128Mi"
+            cpu: "1000m"

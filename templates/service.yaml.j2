@@ -1,0 +1,13 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ appName }}-service
+spec:
+  selector:
+    app: {{ appName }}
+  ports:
+    {% for portDef in ports -%}
+    - port: {{ portDef.port }}
+      name: {{ portDef.name }}{% if portDef.protocol %}
+      protocol: {{ portDef.protocol }}{% endif %}
+    {% endfor %}
