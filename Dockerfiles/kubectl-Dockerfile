@@ -1,0 +1,7 @@
+FROM alpine:3.12
+WORKDIR /deploy
+CMD sleep 10000
+RUN wget "https://storage.googleapis.com/kubernetes-release/release/$(wget https://storage.googleapis.com/kubernetes-release/release/stable.txt -O-)/bin/linux/amd64/kubectl" && \
+    chmod +x ./kubectl && \
+    mv kubectl /usr/local/bin
+

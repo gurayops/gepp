@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
 import os
+import subprocess
+import tarfile
+import io
 import jinja2
 import git
 import docker
-import subprocess
 
 # For generating names from directory names and user input
 from slugify import slugify
@@ -74,6 +76,11 @@ def doesFileExist(fileName):
     return os.path.exists(os.path.join(os.getcwd(), fileName))
 
 
+def create_k8s_dir(dirname='kubernetes'):
+    if not doesFileExist(dirname):
+        os.mkdir(os.path.join(os.getcwd(), dirname))
+
+
 def check_and_create(fileName, templates, templateName, emoji='', vars={}):
     print(f'{emoji} Checking for {fileName}... ', end='')
     if not doesFileExist(fileName):
@@ -139,15 +146,19 @@ def create_k3d_cluster(name, images=[]):
 
     if not clusterExists:
         print(f'   - Running "k3d cluster create {name}"... ', end='')
-        result = subprocess.run(['k3d', 'cluster', 'create', name],
-                                stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        result = subprocess.run(
+            [
+                'k3d', 'cluster', 'create', '-p', '80@loadbalancer', '-p', '443@loadbalancer', name
+            ],
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE
+        )
         if result.stderr:
             print('Got error. ❌ Details:')
             print(result.stderr.decode(), '\n', '-' * 20)
             return False
         print('Done! ✅')
 
-    print('   - Creating/Merging ./kubeconfig file with the new config... ', end='')
+    print('   - Creating/Merging ./kubeconfig file... ', end='')
     result = subprocess.run(['k3d', 'kubeconfig', 'merge', name, '-o', './kubeconfig'],
                             stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     if result.stderr:
@@ -169,6 +180,71 @@ def create_k3d_cluster(name, images=[]):
     return True
 
 
+def get_k3d_info(cluster_name: str):
+    """
+    Returns exposed port list from k3d Docker LB container.
+    """
+    containerName = f'k3d-{cluster_name}-serverlb'
+    containerPorts = (80, 443, 6443)
+    exposedPorts = {}
+
+    # TODO: make this part a function or method
+    client = docker.from_env()
+    try:
+        serverVersion = client.version()['Components'][0]['Version']
+    except:
+        print('Couldnt connect to Docker daemon. Passing image build phase')
+        return
+
+    loadbalancer = client.containers.get(containerName)
+    for pair in loadbalancer.ports.items():
+        exposedPorts[pair[0].split('/')[0]] = pair[1][0]['HostPort']
+
+    return exposedPorts
+
+
+def deploy_to_k8s(appName):
+    print('   - Creating a temp container with kubectl... ', end='')
+
+    client = docker.from_env()
+    deployContainer = client.containers.run(
+        image='guray/gepp-kubectl:v1.18.6',
+        environment=['KUBECONFIG=/kubeconfig'],
+        network=f'k3d-{appName}',
+        remove=True,
+        detach=True
+    )
+
+    print(f'Named: {deployContainer.name}. Done!')
+
+    print('   - Copying K8s object YAMLs and kubeconfig to temp container... ', end='')
+    # Send YAMLs and kubeconfig
+    tempFile = io.BytesIO()
+    tarFile = tarfile.open(fileobj=tempFile, mode='w')
+    tarFile.add('kubernetes')
+    tarFile.add('kubeconfig')
+    tarFile.close()
+    tempFile.seek(0)
+    deployContainer.put_archive('/', tempFile)
+
+    # Switch DNS and port to match with internal network
+    deployContainer.exec_run(
+        cmd=f"sed -i -E 's/0.0.0.0\:\d+/k3d-{appName}-serverlb:6443/' /kubeconfig")
+
+    print('Done!')
+
+    # Deploy K8s objects
+
+    print('   - Deploying YAMLs... ', end='')
+    deployContainer.exec_run(cmd="kubectl apply -f /kubernetes")
+    print('Done!')
+
+    print('   - Removing temp container... ', end='')
+    deployContainer.remove(force=True)
+    print('Done!')
+    return True
+
+
 def main():
 
     ##### Defaults #####
@@ -180,6 +256,7 @@ def main():
         currentCommit = None
 
     tempVars = {
+        'appObject': 'app',
         'appName': 'app',
         'mainFile': 'main.py',
         'appPort': 80,
@@ -243,6 +320,7 @@ def main():
         repo=tempVars['appName'], tag=tempVars['currentCommit'])
 
     print('☸️  Generating YAMLs for Kubernetes:')
+    create_k8s_dir()
     check_and_create(f'kubernetes/deployment-{tempVars["appName"]}.yaml',
                      templates, 'deployment.yaml.j2', '   -', vars=tempVars)
     check_and_create(f'kubernetes/service-{tempVars["appName"]}.yaml',
@@ -256,6 +334,16 @@ def main():
     # k3d cluster create $NAME + k3d kubeconfig get $NAME
     print('⚓ Creating a test cluster with k3d')
     create_k3d_cluster(tempVars['appName'], images=[tempVars['imageName']])
+
+    # Get exposed port list and print
+    exposedPorts = get_k3d_info(tempVars['appName'])
+    print(
+        f'   - Connect to Kubernetes Ingress via HTTP using \033[1mhttp://localhost:{exposedPorts["80"]}\033[0m')
+    print(
+        f'   - Connect to Kubernetes Ingress via HTTPS using \033[1mhttps://localhost:{exposedPorts["443"]}\033[0m')
+
+    print('🚀 Deploying apps to Kubernetes')
+    deploy_to_k8s(tempVars['appName'])
 
     print('Done! ✅')
 

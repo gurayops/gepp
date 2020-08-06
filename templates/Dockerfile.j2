@@ -17,4 +17,4 @@ USER {{ userID }}
 COPY {{ codeDir }} {{ imageWorkDir }}
 
 # Default command is in JSON syntax and runs gunicorn directly
-CMD ["gunicorn", "-b", "0.0.0.0:{{ appPort }}", "-w", "4", "{{ mainFile|trim('.py') }}:{{ appName }}"]
+CMD ["gunicorn", "-b", "0.0.0.0:{{ appPort }}", "-w", "4", "{{ mainFile|trim('.py') }}:{{ appObject }}"]
