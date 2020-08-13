@@ -1,0 +1,8 @@
+--- Malzemeler
+__pycache__/
+venv/
+.git/
+.gitignore/
+.vscode/
+README.md
+Dockerfiles

@@ -1,4 +1,15 @@
 #!/usr/bin/env python3
+
+# Terraform CDK imports
+from imports.azurerm import \
+    AzurermProvider, \
+    ResourceGroup, \
+    KubernetesCluster, \
+    KubernetesClusterDefaultNodePool, \
+    KubernetesClusterIdentity, ResourceGroupConfig, AzurermProviderConfig, AzurermProviderFeatures
+from cdktf import App, TerraformStack, TerraformOutput
+from constructs import Construct
+
 import os
 import subprocess
 import tarfile
@@ -60,6 +71,41 @@ secretDefinitions = [
         "path": "/secrets/jwt"
     }
 ]
+
+
+class TFStack(TerraformStack):
+    def __init__(self, scope: Construct, ns: str):
+        super().__init__(scope, ns)
+
+        # define resources here
+        features = AzurermProviderFeatures()
+        provider = AzurermProvider(self, 'azure', features=[features])
+
+        node_pool = KubernetesClusterDefaultNodePool(
+            name='default', node_count=1, vm_size='Standard_D2_v2')
+
+        # resource_group = ResourceGroup(
+        #    self, name='gepp', location='East US', id='')
+        resource_group = ResourceGroupConfig(name='gepp', location='East US')
+
+        identity = KubernetesClusterIdentity(type='SystemAssigned')
+
+        cluster = KubernetesCluster(
+            self, 'gepp-kube-cluster',
+            name='gepp-kube-cluster',
+            default_node_pool=[node_pool],
+            dns_prefix='gepp',
+            location=resource_group.location,
+            resource_group_name=resource_group.name,
+            identity=[identity],
+            tags={"genarated": "gepp"}
+        )
+
+        kubeconfig = TerraformOutput(
+            self, 'kubeconfig',
+            value=cluster.kube_config_raw,
+            sensitive=True
+        )
 
 
 def generate_default_config():
@@ -169,7 +215,7 @@ def create_k3d_cluster(name, images=[]):
 
     for imageTag in images:
         print(f'   - Importing image {imageTag} to the cluster... ', end='')
-        result = subprocess.run(['k3d', 'image', 'import', imageTag, '-c', 'rastgelesayi'],
+        result = subprocess.run(['k3d', 'image', 'import', imageTag, '-c', name],
                                 stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         if result.stderr:
             print('Got error. ❌ Details:')
@@ -245,6 +291,21 @@ def deploy_to_k8s(appName):
     return True
 
 
+def generate_terraform(appName):
+    app = App()
+    TFStack(app, appName)
+    print(
+        f'   - Starting synth...', end='')
+    app.synth()
+    print('Done \033[1mAvailable in cdktf.out directory\033[0m ✅')
+    print('   - Deleting .terraform symlink... ', end='')
+    os.remove(os.path.join(os.getcwd(), 'cdktf.out', '.terraform'))
+    print('Done ✅')
+    print(
+        f'   - You may edit \033[1mcdk.tf.json\033[0m and run \033[1mterraform init, \
+terraform plan, and terraform apply\033[0m in cdktf.out directory according to your needs.')
+
+
 def main():
 
     ##### Defaults #####
@@ -270,7 +331,7 @@ def main():
         'ports': [],
         'dnsName': 'localhost'
     }
-    tempVars['appName'] = slugify(tempVars['baseDir'])
+    tempVars['appName'] = slugify(os.getenv('PROJECT_NAME', 'project'))
 
     ##### Main session #####
     print('🙌 GEPP Starting!')
@@ -329,7 +390,6 @@ def main():
                      templates, 'ingress.yaml.j2', '   -', vars=tempVars)
     check_and_create(f'kubernetes/hp-autoscaler-{tempVars["appName"]}.yaml',
                      templates, 'hp-autoscaler.yaml.j2', '   -', vars=tempVars)
-    # ⚓ 🚀📦☸️
 
     # k3d cluster create $NAME + k3d kubeconfig get $NAME
     print('⚓ Creating a test cluster with k3d')
@@ -344,6 +404,10 @@ def main():
 
     print('🚀 Deploying apps to Kubernetes')
     deploy_to_k8s(tempVars['appName'])
+
+    print('📦 Generating Terraform file for Azure Kubernetes Service')
+
+    generate_terraform(tempVars['appName'])
 
     print('Done! ✅')
 

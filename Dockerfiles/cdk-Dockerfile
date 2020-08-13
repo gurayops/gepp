@@ -1,0 +1,14 @@
+FROM alpine:3.10
+
+WORKDIR /code
+
+ARG TERRAFORM_VERSION=0.13.0
+
+RUN apk add python3 py3-pip npm yarn && \
+    pip3 install --ignore-installed pipenv && \
+    wget https://releases.hashicorp.com/terraform/${TERRAFORM_VERSION}/terraform_${TERRAFORM_VERSION}_linux_amd64.zip && \
+    unzip terraform_${TERRAFORM_VERSION}_linux_amd64.zip && \
+    rm terraform_${TERRAFORM_VERSION}_linux_amd64.zip && \ 
+    chmod +x terraform && \
+    mv terraform /usr/local/bin && \
+    npm install -g cdktf-cli
