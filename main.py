@@ -1,15 +1,5 @@
 #!/usr/bin/env python3
 
-# Terraform CDK imports
-from imports.azurerm import \
-    AzurermProvider, \
-    ResourceGroup, \
-    KubernetesCluster, \
-    KubernetesClusterDefaultNodePool, \
-    KubernetesClusterIdentity, ResourceGroupConfig, AzurermProviderConfig, AzurermProviderFeatures
-from cdktf import App, TerraformStack, TerraformOutput
-from constructs import Construct
-
 import os
 import subprocess
 import tarfile
@@ -73,39 +63,52 @@ secretDefinitions = [
 ]
 
 
-class TFStack(TerraformStack):
-    def __init__(self, scope: Construct, ns: str):
-        super().__init__(scope, ns)
+def get_stack():
+    # Terraform CDK imports
+    from imports.azurerm import \
+        AzurermProvider, \
+        ResourceGroup, \
+        KubernetesCluster, \
+        KubernetesClusterDefaultNodePool, \
+        KubernetesClusterIdentity, ResourceGroupConfig, AzurermProviderConfig, AzurermProviderFeatures
+    from cdktf import App, TerraformStack, TerraformOutput
+    from constructs import Construct
 
-        # define resources here
-        features = AzurermProviderFeatures()
-        provider = AzurermProvider(self, 'azure', features=[features])
+    class TFStack(TerraformStack):
+        def __init__(self, scope: Construct, ns: str):
+            super().__init__(scope, ns)
 
-        node_pool = KubernetesClusterDefaultNodePool(
-            name='default', node_count=1, vm_size='Standard_D2_v2')
+            # define resources here
+            features = AzurermProviderFeatures()
+            provider = AzurermProvider(self, 'azure', features=[features])
 
-        # resource_group = ResourceGroup(
-        #    self, name='gepp', location='East US', id='')
-        resource_group = ResourceGroupConfig(name='gepp', location='East US')
+            node_pool = KubernetesClusterDefaultNodePool(
+                name='default', node_count=1, vm_size='Standard_D2_v2')
 
-        identity = KubernetesClusterIdentity(type='SystemAssigned')
+            # resource_group = ResourceGroup(
+            #    self, name='gepp', location='East US', id='')
+            resource_group = ResourceGroupConfig(
+                name='gepp', location='East US')
 
-        cluster = KubernetesCluster(
-            self, 'gepp-kube-cluster',
-            name='gepp-kube-cluster',
-            default_node_pool=[node_pool],
-            dns_prefix='gepp',
-            location=resource_group.location,
-            resource_group_name=resource_group.name,
-            identity=[identity],
-            tags={"genarated": "gepp"}
-        )
+            identity = KubernetesClusterIdentity(type='SystemAssigned')
 
-        kubeconfig = TerraformOutput(
-            self, 'kubeconfig',
-            value=cluster.kube_config_raw,
-            sensitive=True
-        )
+            cluster = KubernetesCluster(
+                self, 'gepp-kube-cluster',
+                name='gepp-kube-cluster',
+                default_node_pool=[node_pool],
+                dns_prefix='gepp',
+                location=resource_group.location,
+                resource_group_name=resource_group.name,
+                identity=[identity],
+                tags={"genarated": "gepp"}
+            )
+
+            kubeconfig = TerraformOutput(
+                self, 'kubeconfig',
+                value=cluster.kube_config_raw,
+                sensitive=True
+            )
+    return TFStack
 
 
 def generate_default_config():
@@ -292,8 +295,9 @@ def deploy_to_k8s(appName):
 
 
 def generate_terraform(appName):
+    from cdktf import App
     app = App()
-    TFStack(app, appName)
+    get_stack()(app, appName)
     print(
         f'   - Starting synth...', end='')
     app.synth()
