@@ -296,7 +296,7 @@ def deploy_to_k8s(appName):
 
 def generate_terraform(appName):
     from cdktf import App
-    app = App()
+    app = App(stack_traces=False)
     get_stack()(app, appName)
     print(
         f'   - Starting synth...', end='')
