@@ -11,8 +11,13 @@ import docker
 # For generating names from directory names and user input
 from slugify import slugify
 
+#diceware for random name generate
+import diceware
+
 # bullet, prompt_toolkit, cmd, cmd2, click
 from prompt_toolkit.completion import WordCompleter
+from prompt_toolkit import prompt
+from prompt_toolkit.validation import Validator
 
 # Print flush default
 import functools
@@ -310,6 +315,42 @@ def generate_terraform(appName):
 terraform plan, and terraform apply\033[0m in cdktf.out directory according to your needs.')
 
 
+def get_seperated_port_list(portsWithComma):
+    pass
+
+# Validators 
+def is_TCP(value):
+    return value == 'TCP'
+
+
+def is_UDP(value):
+    return value == 'UDP'
+
+
+def is_yes(value):
+    return value == 'Y' or value == 'y'
+
+
+def is_no(value):
+    return value == 'N' or value == 'n'
+
+
+def is_yes_or_no(value):
+    return is_yes(value) or is_no(value)
+
+
+def is_name(value):
+    return value.isalnum()
+
+
+def is_protocol(value):
+    return is_TCP(value) or is_UDP(value)
+
+
+def is_port(value):
+    return value.isdigit() and (1 <= int(value) <= 65535)
+
+
 def main():
 
     ##### Defaults #####
@@ -347,15 +388,57 @@ def main():
 
     templates = jinja2.Environment(
         loader=jinja2.PackageLoader(package_name='main'), autoescape=True)
-    '''
-    TODO: fix here to include prompt toolkit and get a list of ports
+
+    yesNoValidator = Validator.from_callable(
+        is_yes_or_no,
+        error_message='This input contains non-yes/no',
+        move_cursor_to_end=True)
 
     listening = prompt(
-        "Is the app listening additional ports (for exposing metrics, healthchecks etc.)?")
+        "Is the app listening additional ports (for exposing metrics, healthchecks etc.)? [Y/n]: ",
+        validator=yesNoValidator
+    )
 
-    if listening:
-        print("it is listening!")
-    '''
+    if is_yes(listening):
+        print(
+            'Write additional ports following this template:\n\
+                name: any,\n\
+                protocol: TCP | UDP\n\
+                port: number')
+
+        nameValidator = Validator.from_callable(
+            is_name,
+            error_message='This input contains non-alphanumeric characters for name',
+            move_cursor_to_end=True)
+
+        protocolValidator = Validator.from_callable(
+            is_protocol,
+            error_message='This input must TCP or UDP',
+            move_cursor_to_end=True)
+
+        protocolCompleter = WordCompleter(['TCP', 'UDP'])
+
+        portValidator = Validator.from_callable(
+            is_port,
+            error_message='This input must between 1 and 65535',
+            move_cursor_to_end=True)
+
+        while True:
+
+            dicewareOpts = diceware.handle_options(args=["-n", "3"])
+
+            additionalPortName = prompt("name: ", validator=nameValidator, default=diceware.get_passphrase(dicewareOpts))
+            additionalPortProtocol = prompt(
+                "protocol: ", validator=protocolValidator, completer=protocolCompleter, default='TCP')
+            additionalPort = prompt("port: ", validator=portValidator)
+
+            tempVars['ports'].append(
+                {'name': additionalPortName, 'protocol': additionalPortProtocol, 'port': additionalPort})
+            print("\n🌸\n")
+
+            isContinue = prompt("Continue? [Y/n]: ", validator=yesNoValidator)
+            if is_no(isContinue):
+                break
 
     print('📍 Locating main.py file... ', end='')
     try:
