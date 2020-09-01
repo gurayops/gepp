@@ -256,15 +256,21 @@ def deploy_to_k8s(appName):
     print('   - Creating a temp container with kubectl... ', end='')
 
     client = docker.from_env()
-    deployContainer = client.containers.run(
-        image='guray/gepp-kubectl:v1.18.6',
-        environment=['KUBECONFIG=/kubeconfig'],
-        network=f'k3d-{appName}',
-        remove=True,
-        detach=True
-    )
+    
+    try:
+        deployContainer = client.containers.run(
+            image='guray/gepp-kubectl:v1.18.6',
+            environment=['KUBECONFIG=/kubeconfig'],
+            network=f'k3d-{appName}',
+            remove=True,
+            detach=True
+        )
 
-    print(f'Named: {deployContainer.name}. Done!')
+        print(f'Named: {deployContainer.name}. Done!')
+    
+    except Exception as err:
+        print(err)
+
 
     print('   - Copying K8s object YAMLs and kubeconfig to temp container... ', end='')
     # Send YAMLs and kubeconfig
@@ -277,20 +283,28 @@ def deploy_to_k8s(appName):
     deployContainer.put_archive('/', tempFile)
 
     # Switch DNS and port to match with internal network
-    deployContainer.exec_run(
-        cmd=f"sed -i -E 's/0.0.0.0\:\d+/k3d-{appName}-serverlb:6443/' /kubeconfig")
-
-    print('Done!')
-
+    try:
+        deployContainer.exec_run(cmd=f"sed -i -E 's/0.0.0.0\:\d+/k3d-{appName}-serverlb:6443/' /kubeconfig")
+        print('Done!')
+    except Exception as err:
+        print(err)
     # Deploy K8s objects
 
-    print('   - Deploying YAMLs... ', end='')
-    deployContainer.exec_run(cmd="kubectl apply -f /kubernetes")
-    print('Done!')
+    try:
+        print('   - Deploying YAMLs... ', end='')
+        deployContainer.exec_run(cmd="kubectl apply -f /kubernetes")
+        print('Done!')
+    except Exception as err:
+        print(err)
 
-    print('   - Removing temp container... ', end='')
-    deployContainer.remove(force=True)
-    print('Done!')
+    try:
+        print('   - Removing temp container... ', end='')
+        deployContainer.remove(force=True)
+        print('Done!')
+    
+    except Exception as err:
+        print(err)
+    
     return True
 
 
