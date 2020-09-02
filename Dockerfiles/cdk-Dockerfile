@@ -3,6 +3,7 @@ FROM alpine:3.10
 WORKDIR /code
 
 ARG TERRAFORM_VERSION=0.13.0
+ARG CDKTF_VERSION=v0.0.15
 
 RUN apk add python3 py3-pip npm yarn && \
     pip3 install --ignore-installed pipenv && \
@@ -11,4 +12,4 @@ RUN apk add python3 py3-pip npm yarn && \
     rm terraform_${TERRAFORM_VERSION}_linux_amd64.zip && \ 
     chmod +x terraform && \
     mv terraform /usr/local/bin && \
-    npm install -g cdktf-cli
+    npm install -g cdktf-cli@${CDKTF_VERSION}

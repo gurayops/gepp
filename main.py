@@ -63,7 +63,11 @@ secretDefinitions = [
 ]
 
 
-def get_stack():
+def get_stack(instance_type="Standard_D2_v2",
+              cluster_name="gepp-kube-cluster",
+              cluster_dns_prefix="gepp",
+              cluster_location='East US',
+              resource_group_name='gepp'):
     # Terraform CDK imports
     from imports.azurerm import \
         AzurermProvider, \
@@ -83,20 +87,20 @@ def get_stack():
             provider = AzurermProvider(self, 'azure', features=[features])
 
             node_pool = KubernetesClusterDefaultNodePool(
-                name='default', node_count=1, vm_size='Standard_D2_v2')
+                name='default', node_count=1, vm_size='${var.instance_type}')
 
             # resource_group = ResourceGroup(
             #    self, name='gepp', location='East US', id='')
             resource_group = ResourceGroupConfig(
-                name='gepp', location='East US')
+                name='${var.resource_group}', location='${var.cluster_location}')
 
             identity = KubernetesClusterIdentity(type='SystemAssigned')
 
             cluster = KubernetesCluster(
-                self, 'gepp-kube-cluster',
-                name='gepp-kube-cluster',
+                self, cluster_name,
+                name=cluster_name,
                 default_node_pool=[node_pool],
-                dns_prefix='gepp',
+                dns_prefix=cluster_dns_prefix,
                 location=resource_group.location,
                 resource_group_name=resource_group.name,
                 identity=[identity],
@@ -108,6 +112,30 @@ def get_stack():
                 value=cluster.kube_config_raw,
                 sensitive=True
             )
+
+            self.add_override(path='variable', value={
+                "cluster_size": {
+                    "description": "Number of nodes that will be in default pool",
+                    "type": "number",
+                    "default": 3
+                },
+                "instance_type": {
+                    "description": "Instance type",
+                    "type": "string",
+                    "default": instance_type
+                },
+                "cluster_location": {
+                    "description": "Location of the cluster",
+                    "type": "string",
+                    "default": cluster_location
+                },
+                "resource_group": {
+                    "description": "Azure resource group name for cluster to be created in",
+                    "type": "string",
+                    "default": resource_group_name
+                }
+            })
+
     return TFStack
 
 
@@ -311,7 +339,22 @@ def deploy_to_k8s(appName):
 def generate_terraform(appName):
     from cdktf import App
     app = App(stack_traces=False)
-    get_stack()(app, appName)
+    stack = get_stack()
+    stack(app, appName)
+    """
+    TODO: add input variables
+    stack.add_override(path='variable', value={
+        "tags": {
+            "description": "Tags for the instance",
+            "type": "map(string)"
+        },
+        "instance_type": {
+            "description": "Instance type",
+            "type": "string"
+        }
+    })
+    """
+    # stack.add_override()
     print(
         f'   - Starting synth...', end='')
     app.synth()

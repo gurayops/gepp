@@ -24,7 +24,6 @@ RUN apk add git nodejs
 COPY requirements.txt /code
 RUN pip install -r requirements.txt
 
-COPY . /code
 
 COPY --from=cdkbuild /code/imports /code/imports
 COPY --from=cdkbuild /code/cdktf.json /code/cdktf.json
@@ -33,3 +32,5 @@ COPY --from=cdkbuild /code/cdktf.json /code/cdktf.json
 WORKDIR /project
 
 CMD /code/main.py
+
+COPY . /code
