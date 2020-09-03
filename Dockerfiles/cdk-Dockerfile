@@ -3,7 +3,7 @@ FROM alpine:3.10
 WORKDIR /code
 
 ARG TERRAFORM_VERSION=0.13.0
-ARG CDKTF_VERSION=v0.0.15
+ARG CDKTF_VERSION=v0.0.17
 
 RUN apk add python3 py3-pip npm yarn && \
     pip3 install --ignore-installed pipenv && \
