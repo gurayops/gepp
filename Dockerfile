@@ -1,4 +1,4 @@
-FROM guray/tfcdkc:0.0.14 AS cdkbuild
+FROM guray/tfcdkc:0.0.17 AS cdkbuild
 
 
 #RUN cdktf init --project-name iac-gcp \
