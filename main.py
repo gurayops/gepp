@@ -7,12 +7,18 @@ import io
 import jinja2
 import git
 import docker
+import argparse
 
 # For generating names from directory names and user input
 from slugify import slugify
 
+# diceware for random name generate
+import diceware
+
 # bullet, prompt_toolkit, cmd, cmd2, click
 from prompt_toolkit.completion import WordCompleter
+from prompt_toolkit import prompt
+from prompt_toolkit.validation import Validator
 
 # Print flush default
 import functools
@@ -284,7 +290,7 @@ def deploy_to_k8s(appName):
     print('   - Creating a temp container with kubectl... ', end='')
 
     client = docker.from_env()
-    
+
     try:
         deployContainer = client.containers.run(
             image='guray/gepp-kubectl:v1.18.6',
@@ -295,10 +301,9 @@ def deploy_to_k8s(appName):
         )
 
         print(f'Named: {deployContainer.name}. Done!')
-    
+
     except Exception as err:
         print(err)
-
 
     print('   - Copying K8s object YAMLs and kubeconfig to temp container... ', end='')
     # Send YAMLs and kubeconfig
@@ -329,10 +334,10 @@ def deploy_to_k8s(appName):
         print('   - Removing temp container... ', end='')
         deployContainer.remove(force=True)
         print('Done!')
-    
+
     except Exception as err:
         print(err)
-    
+
     return True
 
 
@@ -367,10 +372,45 @@ def generate_terraform(appName):
 terraform plan, and terraform apply\033[0m in cdktf.out directory according to your needs.')
 
 
-def main():
+def get_seperated_port_list(portsWithComma):
+    pass
 
-    ##### Defaults #####
-    interactive = False
+# Validators
+
+
+def is_TCP(value):
+    return value == 'TCP'
+
+
+def is_UDP(value):
+    return value == 'UDP'
+
+
+def is_yes(value):
+    return value == 'Y' or value == 'y'
+
+
+def is_no(value):
+    return value == 'N' or value == 'n'
+
+
+def is_yes_or_no(value):
+    return is_yes(value) or is_no(value)
+
+
+def is_name(value):
+    return value.isalnum()
+
+
+def is_protocol(value):
+    return is_TCP(value) or is_UDP(value)
+
+
+def is_port(value):
+    return value.isdigit() and (1 <= int(value) <= 65535)
+
+
+def main(interactive):
     # Get current commit:
     try:
         currentCommit = git.Repo(os.getcwd()).head.commit.hexsha
@@ -397,23 +437,6 @@ def main():
     ##### Main session #####
     print('🙌 GEPP Starting!')
 
-    if interactive:
-        config = get_interactive_config()
-    else:
-        config = generate_default_config()
-
-    templates = jinja2.Environment(
-        loader=jinja2.PackageLoader(package_name='main'), autoescape=True)
-    '''
-    TODO: fix here to include prompt toolkit and get a list of ports
-
-    listening = prompt(
-        "Is the app listening additional ports (for exposing metrics, healthchecks etc.)?")
-
-    if listening:
-        print("it is listening!")
-    '''
-
     print('📍 Locating main.py file... ', end='')
     try:
         mainFile = get_main()
@@ -422,6 +445,69 @@ def main():
         import sys
         sys.exit(1)
     tempVars['mainFile'] = mainFile
+
+    if interactive:
+        config = get_interactive_config()
+
+        # TODO Should use `get_interactive_config` function for rest of this block
+        yesNoValidator = Validator.from_callable(
+            is_yes_or_no,
+            error_message='This input contains non-yes/no',
+            move_cursor_to_end=True)
+
+        listening = prompt(
+            "Is the app listening additional ports (for exposing metrics, healthchecks etc.)? [Y/n]: ",
+            validator=yesNoValidator
+        )
+
+        if is_yes(listening):
+            print(
+                'Write additional ports following this template:\n\
+                    name: any,\n\
+                    protocol: TCP | UDP\n\
+                    port: number')
+
+            nameValidator = Validator.from_callable(
+                is_name,
+                error_message='This input contains non-alphanumeric characters for name',
+                move_cursor_to_end=True)
+
+            protocolValidator = Validator.from_callable(
+                is_protocol,
+                error_message='This input must TCP or UDP',
+                move_cursor_to_end=True)
+
+            protocolCompleter = WordCompleter(['TCP', 'UDP'])
+
+            portValidator = Validator.from_callable(
+                is_port,
+                error_message='This input must between 1 and 65535',
+                move_cursor_to_end=True)
+
+            while True:
+
+                dicewareOpts = diceware.handle_options(args=["-n", "3"])
+
+                additionalPortName = prompt(
+                    "name: ", validator=nameValidator, default=diceware.get_passphrase(dicewareOpts))
+                additionalPortProtocol = prompt(
+                    "protocol: ", validator=protocolValidator, completer=protocolCompleter, default='TCP')
+                additionalPort = prompt("port: ", validator=portValidator)
+
+                tempVars['ports'].append(
+                    {'name': additionalPortName, 'protocol': additionalPortProtocol, 'port': additionalPort})
+                print("\n🌸\n")
+
+                isContinue = prompt(
+                    "Continue? [Y/n]: ", validator=yesNoValidator)
+                if is_no(isContinue):
+                    break
+
+    else:
+        config = generate_default_config()
+
+    templates = jinja2.Environment(
+        loader=jinja2.PackageLoader(package_name='main'), autoescape=True)
 
     tempVars['ports'].append(
         {'name': 'http', 'protocol': 'TCP', 'port': tempVars['appPort']})
@@ -474,4 +560,9 @@ def main():
 
 
 if __name__ == '__main__':
-    main()
+    parser = argparse.ArgumentParser(
+        description='GEPP - Developer\'s Helper to K8s')
+    parser.add_argument('-i', '--interactive', action='store_true')
+    args = parser.parse_args()
+
+    main(args.interactive)
