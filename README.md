@@ -33,6 +33,8 @@ It is mostly a repetitive task to Dockerize your project and generating YAMLs th
 
 GEPP is being developed to shorten these procedures to a fully(or mostly) automatic, yet useful process. Just run `gepp` inside a directory and wait for your localhost-port pair to connect your app.
 
+For interactively using GEPP run `gepp -i` or `gepp --interactive`. (Currently works for only additional ports)
+
 You will find Dockerfile, .dockerignore, Kubernetes YAMLS, AKS definition for deploying it with Terraform in your directory.
 
 ## Status
