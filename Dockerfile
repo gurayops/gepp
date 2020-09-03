@@ -31,6 +31,6 @@ COPY --from=cdkbuild /code/cdktf.json /code/cdktf.json
 # Mount user's project to this location
 WORKDIR /project
 
-CMD /code/main.py
+ENTRYPOINT ["/code/main.py"]
 
 COPY . /code
