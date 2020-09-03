@@ -1,4 +1,4 @@
-FROM guray/tfcdkc:0.0.14 AS cdkbuild
+FROM guray/tfcdkc:0.0.17 AS cdkbuild
 
 
 #RUN cdktf init --project-name iac-gcp \
@@ -31,6 +31,6 @@ COPY --from=cdkbuild /code/cdktf.json /code/cdktf.json
 # Mount user's project to this location
 WORKDIR /project
 
-CMD /code/main.py
+ENTRYPOINT ["/code/main.py"]
 
 COPY . /code
