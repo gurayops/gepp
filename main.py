@@ -293,7 +293,7 @@ def deploy_to_k8s(appName):
 
     try:
         deployContainer = client.containers.run(
-            image='guray/gepp-kubectl:v1.18.6',
+            image='guray/gepp-kubectl:v1.19.0',
             environment=['KUBECONFIG=/kubeconfig'],
             network=f'k3d-{appName}',
             remove=True,
@@ -317,7 +317,8 @@ def deploy_to_k8s(appName):
 
     # Switch DNS and port to match with internal network
     try:
-        deployContainer.exec_run(cmd=f"sed -i -E 's/0.0.0.0\:\d+/k3d-{appName}-serverlb:6443/' /kubeconfig")
+        deployContainer.exec_run(
+            cmd=f"sed -i -E 's/0.0.0.0\:\d+/k3d-{appName}-serverlb:6443/' /kubeconfig")
         print('Done!')
     except Exception as err:
         print(err)
