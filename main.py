@@ -147,15 +147,43 @@ def check_and_create(fileName, templates, templateName, emoji='', vars={}):
     else:
         print('Found. ✅')
 
+def get_main_name():
+    files=os.listdir()
+    fileName=[]
+    for file in files:
+        if file[-2:]=='py':
+            fileName.append(file)
+        else:
+            pass
+
+    if len(fileName) == 1:
+        os.rename(fileName[0],'main.py')
+        return 'main.py'
+    elif len(fileName)==0:
+        print('You do not have py file in this directory, please go into the correct directory')
+    else:
+        print()
+        for file in fileName:
+            print(file)
+
+        file=prompt('there are too many py files are in this directory, please choose one of them as the main file: ')
+
+        if not file in fileName:
+            print('You do not have any file with this name')
+        elif file in fileName:
+            os.rename(file,'main.py')            
+            return 'main.py'
 
 def get_main():
-    if not doesFileExist('main.py'):
-        print('Not found  ❌')
-        # TODO: get main file's name
-        raise NameError('Couldnt found main')
-    else:
+    fileName=get_main_name()
+
+    if doesFileExist('main.py'):
         print('Present. ✅')
         return 'main.py'
+    else:
+        print('Not found ❌')
+        raise NameError('Couldnt found main')
+
 
 
 def build_image(org='', repo='gepp', tag='latest'):
