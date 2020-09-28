@@ -366,7 +366,9 @@ def generate_terraform(appName):
     app.synth()
     print('Done \033[1mAvailable in cdktf.out directory\033[0m ✅')
     print('   - Deleting .terraform symlink... ', end='')
-    os.remove(os.path.join(os.getcwd(), 'cdktf.out', '.terraform'))
+    symlinkPath = os.path.join(os.getcwd(), 'cdktf.out', '.terraform')
+    if os.path.exists(symlinkPath):
+        os.remove(symlinkPath)
     print('Done ✅')
     print(
         f'   - You may edit \033[1mcdk.tf.json\033[0m and run \033[1mterraform init, \
