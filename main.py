@@ -157,8 +157,7 @@ def get_main_name():
             pass
 
     if len(fileName) == 1:
-        os.rename(fileName[0],'main.py')
-        return 'main.py'
+        return fileName[0]
     elif len(fileName)==0:
         print('You do not have py file in this directory, please go into the correct directory')
     else:
@@ -166,20 +165,19 @@ def get_main_name():
         for file in fileName:
             print(file)
 
-        file=prompt('there are too many py files are in this directory, please choose one of them as the main file: ')
+        file=input('there are too many py files are in this directory, please choose one of them as the main file: ')
 
         if not file in fileName:
             print('You do not have any file with this name')
-        elif file in fileName:
-            os.rename(file,'main.py')            
-            return 'main.py'
+        elif file in fileName:           
+            return file
 
 def get_main():
-    fileName=get_main_name()
+    mainFileName=get_main_name()
 
-    if doesFileExist('main.py'):
-        print('Present. ✅')
-        return 'main.py'
+    if doesFileExist(mainFileName):
+        print(f'{mainFileName} Present. ✅')
+        return mainFileName
     else:
         print('Not found ❌')
         raise NameError('Couldnt found main')
@@ -373,8 +371,6 @@ def main():
     else:
         config = generate_default_config()
 
-    templates = jinja2.Environment(
-        loader=jinja2.PackageLoader(package_name='main'), autoescape=True)
     '''
     TODO: fix here to include prompt toolkit and get a list of ports
 
@@ -385,13 +381,17 @@ def main():
         print("it is listening!")
     '''
 
-    print('📍 Locating main.py file... ', end='')
+    print('📍 Locating main file... ', end='')
     try:
         mainFile = get_main()
     except:
         print('Could not get main.py, exiting.')
         import sys
         sys.exit(1)
+        
+    templates = jinja2.Environment(
+        loader=jinja2.PackageLoader(package_name=mainFile[:-3]), autoescape=True)
+    
     tempVars['mainFile'] = mainFile
 
     tempVars['ports'].append(
