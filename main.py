@@ -161,16 +161,19 @@ def get_main_name():
     elif len(fileName)==0:
         print('You do not have py file in this directory, please go into the correct directory')
     else:
-        print()
-        for file in fileName:
-            print(file)
+        if 'main.py' in fileName:
+            return 'main.py'
+        else:
+            print()
+            for file in fileName:
+                print(file)
 
-        file=input('there are too many py files are in this directory, please choose one of them as the main file: ')
+            file=input('there are too many py files are in this directory, please choose one of them as the main file: ')
 
-        if not file in fileName:
-            print('You do not have any file with this name')
-        elif file in fileName:           
-            return file
+            if not file in fileName:
+                print('You do not have any file with this name')
+            elif file in fileName:           
+                return file
 
 def get_main():
     mainFileName=get_main_name()
