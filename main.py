@@ -7,12 +7,18 @@ import io
 import jinja2
 import git
 import docker
+import argparse
 
 # For generating names from directory names and user input
 from slugify import slugify
 
+# diceware for random name generate
+import diceware
+
 # bullet, prompt_toolkit, cmd, cmd2, click
 from prompt_toolkit.completion import WordCompleter
+from prompt_toolkit import prompt
+from prompt_toolkit.validation import Validator
 
 # Print flush default
 import functools
@@ -63,7 +69,11 @@ secretDefinitions = [
 ]
 
 
-def get_stack():
+def get_stack(instance_type="Standard_D2_v2",
+              cluster_name="gepp-kube-cluster",
+              cluster_dns_prefix="gepp",
+              cluster_location='East US',
+              resource_group_name='gepp'):
     # Terraform CDK imports
     from imports.azurerm import \
         AzurermProvider, \
@@ -83,20 +93,20 @@ def get_stack():
             provider = AzurermProvider(self, 'azure', features=[features])
 
             node_pool = KubernetesClusterDefaultNodePool(
-                name='default', node_count=1, vm_size='Standard_D2_v2')
+                name='default', node_count=1, vm_size='${var.instance_type}')
 
             # resource_group = ResourceGroup(
             #    self, name='gepp', location='East US', id='')
             resource_group = ResourceGroupConfig(
-                name='gepp', location='East US')
+                name='${var.resource_group}', location='${var.cluster_location}')
 
             identity = KubernetesClusterIdentity(type='SystemAssigned')
 
             cluster = KubernetesCluster(
-                self, 'gepp-kube-cluster',
-                name='gepp-kube-cluster',
+                self, cluster_name,
+                name=cluster_name,
                 default_node_pool=[node_pool],
-                dns_prefix='gepp',
+                dns_prefix=cluster_dns_prefix,
                 location=resource_group.location,
                 resource_group_name=resource_group.name,
                 identity=[identity],
@@ -108,6 +118,30 @@ def get_stack():
                 value=cluster.kube_config_raw,
                 sensitive=True
             )
+
+            self.add_override(path='variable', value={
+                "cluster_size": {
+                    "description": "Number of nodes that will be in default pool",
+                    "type": "number",
+                    "default": 3
+                },
+                "instance_type": {
+                    "description": "Instance type",
+                    "type": "string",
+                    "default": instance_type
+                },
+                "cluster_location": {
+                    "description": "Location of the cluster",
+                    "type": "string",
+                    "default": cluster_location
+                },
+                "resource_group": {
+                    "description": "Azure resource group name for cluster to be created in",
+                    "type": "string",
+                    "default": resource_group_name
+                }
+            })
+
     return TFStack
 
 
@@ -285,15 +319,20 @@ def deploy_to_k8s(appName):
     print('   - Creating a temp container with kubectl... ', end='')
 
     client = docker.from_env()
-    deployContainer = client.containers.run(
-        image='guray/gepp-kubectl:v1.18.6',
-        environment=['KUBECONFIG=/kubeconfig'],
-        network=f'k3d-{appName}',
-        remove=True,
-        detach=True
-    )
 
-    print(f'Named: {deployContainer.name}. Done!')
+    try:
+        deployContainer = client.containers.run(
+            image='guray/gepp-kubectl:v1.19.0',
+            environment=['KUBECONFIG=/kubeconfig'],
+            network=f'k3d-{appName}',
+            remove=True,
+            detach=True
+        )
+
+        print(f'Named: {deployContainer.name}. Done!')
+
+    except Exception as err:
+        print(err)
 
     print('   - Copying K8s object YAMLs and kubeconfig to temp container... ', end='')
     # Send YAMLs and kubeconfig
@@ -306,43 +345,104 @@ def deploy_to_k8s(appName):
     deployContainer.put_archive('/', tempFile)
 
     # Switch DNS and port to match with internal network
-    deployContainer.exec_run(
-        cmd=f"sed -i -E 's/0.0.0.0\:\d+/k3d-{appName}-serverlb:6443/' /kubeconfig")
-
-    print('Done!')
-
+    try:
+        deployContainer.exec_run(
+            cmd=f"sed -i -E 's/0.0.0.0\:\d+/k3d-{appName}-serverlb:6443/' /kubeconfig")
+        print('Done!')
+    except Exception as err:
+        print(err)
     # Deploy K8s objects
 
-    print('   - Deploying YAMLs... ', end='')
-    deployContainer.exec_run(cmd="kubectl apply -f /kubernetes")
-    print('Done!')
+    try:
+        print('   - Deploying YAMLs... ', end='')
+        deployContainer.exec_run(cmd="kubectl apply -f /kubernetes")
+        print('Done!')
+    except Exception as err:
+        print(err)
 
-    print('   - Removing temp container... ', end='')
-    deployContainer.remove(force=True)
-    print('Done!')
+    try:
+        print('   - Removing temp container... ', end='')
+        deployContainer.remove(force=True)
+        print('Done!')
+
+    except Exception as err:
+        print(err)
+
     return True
 
 
 def generate_terraform(appName):
     from cdktf import App
     app = App(stack_traces=False)
-    get_stack()(app, appName)
+    stack = get_stack()
+    stack(app, appName)
+    """
+    TODO: add input variables
+    stack.add_override(path='variable', value={
+        "tags": {
+            "description": "Tags for the instance",
+            "type": "map(string)"
+        },
+        "instance_type": {
+            "description": "Instance type",
+            "type": "string"
+        }
+    })
+    """
+    # stack.add_override()
     print(
         f'   - Starting synth...', end='')
     app.synth()
     print('Done \033[1mAvailable in cdktf.out directory\033[0m ✅')
     print('   - Deleting .terraform symlink... ', end='')
-    os.remove(os.path.join(os.getcwd(), 'cdktf.out', '.terraform'))
+    symlinkPath = os.path.join(os.getcwd(), 'cdktf.out', '.terraform')
+    if os.path.exists(symlinkPath):
+        os.remove(symlinkPath)
     print('Done ✅')
     print(
         f'   - You may edit \033[1mcdk.tf.json\033[0m and run \033[1mterraform init, \
 terraform plan, and terraform apply\033[0m in cdktf.out directory according to your needs.')
 
 
-def main():
+def get_seperated_port_list(portsWithComma):
+    pass
 
-    ##### Defaults #####
-    interactive = False
+# Validators
+
+
+def is_TCP(value):
+    return value == 'TCP'
+
+
+def is_UDP(value):
+    return value == 'UDP'
+
+
+def is_yes(value):
+    return value == 'Y' or value == 'y'
+
+
+def is_no(value):
+    return value == 'N' or value == 'n'
+
+
+def is_yes_or_no(value):
+    return is_yes(value) or is_no(value)
+
+
+def is_name(value):
+    return value.isalnum()
+
+
+def is_protocol(value):
+    return is_TCP(value) or is_UDP(value)
+
+
+def is_port(value):
+    return value.isdigit() and (1 <= int(value) <= 65535)
+
+
+def main(interactive):
     # Get current commit:
     try:
         currentCommit = git.Repo(os.getcwd()).head.commit.hexsha
@@ -369,6 +469,7 @@ def main():
     ##### Main session #####
     print('🙌 GEPP Starting!')
 
+ 
     if interactive:
         config = get_interactive_config()
     else:
@@ -385,6 +486,8 @@ def main():
     '''
 
     print('📍 Locating main file... ', end='')
+
+ 
     try:
         mainFile = get_main()
     except:
@@ -396,6 +499,69 @@ def main():
         loader=jinja2.PackageLoader(package_name=mainFile[:-3]), autoescape=True)
     
     tempVars['mainFile'] = mainFile
+
+    if interactive:
+        config = get_interactive_config()
+
+        # TODO Should use `get_interactive_config` function for rest of this block
+        yesNoValidator = Validator.from_callable(
+            is_yes_or_no,
+            error_message='This input contains non-yes/no',
+            move_cursor_to_end=True)
+
+        listening = prompt(
+            "Is the app listening additional ports (for exposing metrics, healthchecks etc.)? [Y/n]: ",
+            validator=yesNoValidator
+        )
+
+        if is_yes(listening):
+            print(
+                'Write additional ports following this template:\n\
+                    name: any,\n\
+                    protocol: TCP | UDP\n\
+                    port: number')
+
+            nameValidator = Validator.from_callable(
+                is_name,
+                error_message='This input contains non-alphanumeric characters for name',
+                move_cursor_to_end=True)
+
+            protocolValidator = Validator.from_callable(
+                is_protocol,
+                error_message='This input must TCP or UDP',
+                move_cursor_to_end=True)
+
+            protocolCompleter = WordCompleter(['TCP', 'UDP'])
+
+            portValidator = Validator.from_callable(
+                is_port,
+                error_message='This input must between 1 and 65535',
+                move_cursor_to_end=True)
+
+            while True:
+
+                dicewareOpts = diceware.handle_options(args=["-n", "3"])
+
+                additionalPortName = prompt(
+                    "name: ", validator=nameValidator, default=diceware.get_passphrase(dicewareOpts))
+                additionalPortProtocol = prompt(
+                    "protocol: ", validator=protocolValidator, completer=protocolCompleter, default='TCP')
+                additionalPort = prompt("port: ", validator=portValidator)
+
+                tempVars['ports'].append(
+                    {'name': additionalPortName, 'protocol': additionalPortProtocol, 'port': additionalPort})
+                print("\n🌸\n")
+
+                isContinue = prompt(
+                    "Continue? [Y/n]: ", validator=yesNoValidator)
+                if is_no(isContinue):
+                    break
+
+    else:
+        config = generate_default_config()
+
+    templates = jinja2.Environment(
+        loader=jinja2.PackageLoader(package_name='main'), autoescape=True)
 
     tempVars['ports'].append(
         {'name': 'http', 'protocol': 'TCP', 'port': tempVars['appPort']})
@@ -448,4 +614,9 @@ def main():
 
 
 if __name__ == '__main__':
-    main()
+    parser = argparse.ArgumentParser(
+        description='GEPP - Developer\'s Helper to K8s')
+    parser.add_argument('-i', '--interactive', action='store_true')
+    args = parser.parse_args()
+
+    main(args.interactive)

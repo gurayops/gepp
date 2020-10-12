@@ -3,4 +3,5 @@ GitPython==3.1
 Jinja2==2.11
 prompt-toolkit==3.0
 python-slugify==4.0
-cdktf==0.0.14
+cdktf==0.0.17
+diceware==0.9.6

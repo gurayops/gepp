@@ -15,7 +15,7 @@ Requirements:
 Run:
 
 ```bash
-docker run -it --rm -v /var/run/docker.sock:/var/run/docker.sock -v $PWD:/project -e PROJECT_NAME=${PWD##*/} guray/gepp:0.1-alpha3
+docker run -it --rm -v /var/run/docker.sock:/var/run/docker.sock -v $PWD:/project -e PROJECT_NAME=${PWD##*/} guray/gepp:0.1-alpha5
 ```
 
 GEPP provides developers to easily run their apps as containerized apps in Kubernetes. Here is what it is aiming:
@@ -24,14 +24,16 @@ GEPP provides developers to easily run their apps as containerized apps in Kuber
 - It will generate a Dockerfile depending on the framework your code uses
 - It will generate YAMLs for Kubernetes deployment, pod autoscaling, service definitions (it will ask some questions like service type) + ingress
 - (optional) It can generate a plan for Terraform for your cloud provider for a K8s cluster and deploying your app (in JSON, using tfcdk)
-- (optional) It will insert environment variable, secretmap, configmaps to the generated YAML (interactively asks) - *WIP*
-- (optional) It can get storageclasses from your cluster and define some storage and insert it to your YAML - *WIP*
-- (optional) It can generate servicemonitor and podmonitor YAML files for Prometheus operator - *WIP*
-- (optional) It can generate network policies for some of the network providers - *WIP*
+- (optional) It will insert environment variable, secretmap, configmaps to the generated YAML (interactively asks) - _WIP_
+- (optional) It can get storageclasses from your cluster and define some storage and insert it to your YAML - _WIP_
+- (optional) It can generate servicemonitor and podmonitor YAML files for Prometheus operator - _WIP_
+- (optional) It can generate network policies for some of the network providers - _WIP_
 
 It is mostly a repetitive task to Dockerize your project and generating YAMLs that look like ones in other projects/microservices. In addition to replaying the same steps, it may easily consume a lot of time to set up to Dockerize your app, write YAMLs for Kubernetes deployment(and define resources), configure autoscheduler, write Ingress manifests for L7 routing/LB, create Kubernetes services etc. After all of these, you should deploy a Kubernetes cluster, either locally or on a remote target; than connect to it, upload & deploy your app.
 
 GEPP is being developed to shorten these procedures to a fully(or mostly) automatic, yet useful process. Just run `gepp` inside a directory and wait for your localhost-port pair to connect your app.
+
+For interactively using GEPP run `gepp -i` or `gepp --interactive`. (Currently works for only additional ports)
 
 You will find Dockerfile, .dockerignore, Kubernetes YAMLS, AKS definition for deploying it with Terraform in your directory.
 
