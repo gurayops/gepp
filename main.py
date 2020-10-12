@@ -181,15 +181,44 @@ def check_and_create(fileName, templates, templateName, emoji='', vars={}):
     else:
         print('Found. ✅')
 
+def get_main_name():
+    files=os.listdir()
+    fileName=[]
+    for file in files:
+        if file[-2:]=='py':
+            fileName.append(file)
+        else:
+            pass
+
+    if len(fileName) == 1:
+        return fileName[0]
+    elif len(fileName)==0:
+        print('You do not have py file in this directory, please go into the correct directory')
+    else:
+        if 'main.py' in fileName:
+            return 'main.py'
+        else:
+            print()
+            for file in fileName:
+                print(file)
+
+            file=input('there are too many py files are in this directory, please choose one of them as the main file: ')
+
+            if not file in fileName:
+                print('You do not have any file with this name')
+            elif file in fileName:           
+                return file
 
 def get_main():
-    if not doesFileExist('main.py'):
-        print('Not found  ❌')
-        # TODO: get main file's name
-        raise NameError('Couldnt found main')
+    mainFileName=get_main_name()
+
+    if doesFileExist(mainFileName):
+        print(f'{mainFileName} Present. ✅')
+        return mainFileName
     else:
-        print('Present. ✅')
-        return 'main.py'
+        print('Not found ❌')
+        raise NameError('Couldnt found main')
+
 
 
 def build_image(org='', repo='gepp', tag='latest'):
@@ -440,13 +469,35 @@ def main(interactive):
     ##### Main session #####
     print('🙌 GEPP Starting!')
 
-    print('📍 Locating main.py file... ', end='')
+ 
+    if interactive:
+        config = get_interactive_config()
+    else:
+        config = generate_default_config()
+
+    '''
+    TODO: fix here to include prompt toolkit and get a list of ports
+
+    listening = prompt(
+        "Is the app listening additional ports (for exposing metrics, healthchecks etc.)?")
+
+    if listening:
+        print("it is listening!")
+    '''
+
+    print('📍 Locating main file... ', end='')
+
+ 
     try:
         mainFile = get_main()
     except:
         print('Could not get main.py, exiting.')
         import sys
         sys.exit(1)
+        
+    templates = jinja2.Environment(
+        loader=jinja2.PackageLoader(package_name=mainFile[:-3]), autoescape=True)
+    
     tempVars['mainFile'] = mainFile
 
     if interactive:
