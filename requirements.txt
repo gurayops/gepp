@@ -1,6 +1,6 @@
 docker==4.2
 GitPython==3.1
-Jinja2==2.11
+Jinja2==2.11.3
 prompt-toolkit==3.0
 python-slugify==4.0
 cdktf==0.0.17
